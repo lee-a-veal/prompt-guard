@@ -1,5 +1,7 @@
 # prompt-guard
 
+[![Repo](https://img.shields.io/badge/GitHub-prompt--guard-181717?logo=github)](https://github.com/lee-a-veal/prompt-guard)
+
 Indirect prompt-injection detection for **Claude Code's own tool outputs**.
 
 When Claude reads a web page, file, command output, or API response, malicious
