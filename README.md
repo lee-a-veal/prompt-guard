@@ -59,6 +59,28 @@ The hook is **advisory, never blocking** — a false positive must never stop yo
 from reading a file. It injects a warning telling Claude to treat the content as
 data; on high risk it tells Claude to invoke the `prompt-guard` skill.
 
+### Wiring into settings.json
+
+`install.sh` prints the snippet but does not edit `settings.json`. When merging
+it in by hand, **back up first** and add prompt-guard as an *additional*
+`PostToolUse` entry — do not overwrite existing hooks (e.g. audit hooks):
+
+```bash
+cp ~/.claude/settings.json ~/.claude/settings.json.bak-$(date +%Y%m%d-%H%M%S)
+```
+
+This deployment's backup lives at
+`~/.claude/settings.json.bak-20260603-162442` (restore it if anything looks
+off). After merging, validate the file before trusting it:
+
+```bash
+python3 -c "import json; json.load(open('$HOME/.claude/settings.json'))" && echo OK
+```
+
+Claude Code reloads hooks at session start (sometimes sooner). To disable
+without removing the entry, set `PROMPTGUARD_MIN_BAND=high` or remove the
+prompt-guard object from the `PostToolUse` array.
+
 ## Use the scanner directly
 
 ```bash
