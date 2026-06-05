@@ -23,8 +23,14 @@ _INVISIBLE = [
     "﻿",  # BOM / zero-width no-break space
     "­",  # soft hyphen
     "͏",  # combining grapheme joiner
+    # Bidi override / isolate chars — known LLM text-direction attack vector
+    "‪", "‫", "‬", "‭", "‮",  # LTR/RTL embedding and override
+    "⁦", "⁧", "⁨", "⁩",             # bidi isolates
 ]
-_INVISIBLE_RE = re.compile("[" + "".join(_INVISIBLE) + "]")
+# Tag characters (U+E0000–U+E007F) are appended as a range in the pattern.
+_INVISIBLE_RE = re.compile(
+    "[" + "".join(_INVISIBLE) + "\U000e0000-\U000e007f]"
+)
 
 # Common homoglyphs -> ASCII. Cyrillic/Greek look-alikes are the usual vectors.
 _HOMOGLYPHS = {
@@ -78,8 +84,7 @@ def decode_base64_layers(text, max_tokens=20):
             decoded = raw.decode("utf-8", "strict")
         except UnicodeDecodeError:
             continue
-        printable = len(_PRINTABLE_RE.findall(decoded))
-        if decoded and printable / float(len(decoded)) >= 0.85:
+        if decoded:
             out.append((token, decoded))
     return out
 
@@ -105,7 +110,7 @@ def normalize(text):
     return {
         "lowered": lowered,
         "leet": fold_leet(lowered),
-        "decoded_layers": decode_base64_layers(text),
+        "decoded_layers": decode_base64_layers(folded),
         "invisible_count": invisible_count,
         "homoglyph_count": homoglyph_count,
     }
