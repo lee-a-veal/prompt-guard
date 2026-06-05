@@ -54,7 +54,7 @@ def _extract_text(tool_response):
             if isinstance(val, str):
                 parts.append(val)
             elif val is not None:
-                parts.append(json.dumps(val, ensure_ascii=False))
+                parts.append(_extract_text(val))
         if parts:
             return "\n".join(parts)
         return json.dumps(tool_response, ensure_ascii=False)

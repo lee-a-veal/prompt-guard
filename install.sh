@@ -25,7 +25,7 @@ Add this to ~/.claude/settings.json (merge into existing "hooks"):
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "WebFetch|Bash|Read|Grep|Glob",
+        "matcher": "WebFetch|Bash|Read|Grep|Glob|Fetch|mcp__fetch",
         "hooks": [
           {
             "type": "command",

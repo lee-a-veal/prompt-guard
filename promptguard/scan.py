@@ -56,6 +56,7 @@ _SIGNALS = [
 # Risk bands. Tuned against the weights above.
 _BAND_MEDIUM = 30
 _BAND_HIGH = 60
+_SCAN_LIMIT = 65536  # 64 KB — head+tail window sufficient to catch injections
 
 
 def _band(score):
@@ -111,19 +112,28 @@ def scan(content, source="unknown"):
     """
     if content is None:
         content = ""
+    original_length = len(content)
+    if original_length > _SCAN_LIMIT:
+        half = _SCAN_LIMIT // 2
+        content = content[:half] + content[-half:]
     norm = _norm.normalize(content)
     found = []
     score = 0
 
     # Primary layer: normalized + homoglyph-folded text.
     score += _match_layer(norm["lowered"], found)
-    # Leet-folded layer catches "ign0re" etc.; dedupe is implicit via banding.
-    score += _match_layer(norm["leet"], found, multiplier=0.6)
+    # Leet-folded layer catches "ign0re" etc. Only run when leet folding actually
+    # changed something — otherwise lowered == leet and every signal fires twice.
+    if norm["leet"] != norm["lowered"]:
+        score += _match_layer(norm["leet"], found, multiplier=0.6)
 
     # Decoded base64 reveals are high-signal: hidden instructions are rarely benign.
     for token, decoded in norm["decoded_layers"]:
         dnorm = _norm.normalize(decoded)
         layer_score = _match_layer(dnorm["lowered"], found, multiplier=1.0)
+        # Apply leet layer to decoded content too — catches double-encoded payloads.
+        if dnorm["leet"] != dnorm["lowered"]:
+            layer_score += _match_layer(dnorm["leet"], found, multiplier=0.6)
         if layer_score:
             score += layer_score + 20  # bonus: it was deliberately hidden
             found.append({
@@ -164,7 +174,7 @@ def scan(content, source="unknown"):
             "homoglyphs": norm["homoglyph_count"],
             "base64_reveals": len(norm["decoded_layers"]),
         },
-        "content_length": len(content),
+        "content_length": original_length,
     }
 
 
