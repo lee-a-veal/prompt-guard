@@ -28,22 +28,11 @@ except Exception:
 _WATCHED = {"WebFetch", "Bash"}
 _READ_TOOLS = {"Read", "Grep", "Glob"}
 
-try:
-    _TAINT_THRESHOLD = int(os.environ.get("PROMPTGUARD_TAINT_THRESHOLD", "3"))
-except (ValueError, TypeError):
-    _TAINT_THRESHOLD = 3
-
-try:
-    _RATE_THRESHOLD = int(os.environ.get("PROMPTGUARD_RATE_THRESHOLD", "5"))
-except (ValueError, TypeError):
-    _RATE_THRESHOLD = 5
-
-_URL_SCAN_ON = os.environ.get("PROMPTGUARD_URL_SCAN", "on").lower() != "off"
-
 
 def _check_d5(tool_name, tool_input):
     """Return ("block", reason) or (None, advisory_str_or_None)."""
-    if tool_name != "WebFetch" or not _URL_SCAN_ON or _urlscan is None:
+    url_scan_on = os.environ.get("PROMPTGUARD_URL_SCAN", "on").lower() != "off"
+    if tool_name != "WebFetch" or not url_scan_on or _urlscan is None:
         return None, None
     url = (tool_input.get("url") or "") if tool_input else ""
     if not url:
@@ -75,8 +64,12 @@ def _check_d6():
     if _session is None:
         return None
     try:
+        taint_threshold = int(os.environ.get("PROMPTGUARD_TAINT_THRESHOLD", "3"))
+    except (ValueError, TypeError):
+        taint_threshold = 3
+    try:
         taint = _session.get_taint_count()
-        if taint >= _TAINT_THRESHOLD:
+        if taint >= taint_threshold:
             return (
                 "⚠ PROMPT-GUARD (session taint): %d flagged content pieces ingested "
                 "this session. Verify this action is not a consequence of earlier "
@@ -91,6 +84,10 @@ def _check_d3(tool_name):
     """Return advisory string or None."""
     if _session is None or tool_name != "WebFetch":
         return None
+    try:
+        rate_threshold = int(os.environ.get("PROMPTGUARD_RATE_THRESHOLD", "5"))
+    except (ValueError, TypeError):
+        rate_threshold = 5
     advisories = []
     try:
         recent_60 = _session.get_recent_calls(60)
@@ -104,7 +101,7 @@ def _check_d3(tool_name):
     try:
         recent_120 = _session.get_recent_calls(120)
         fetch_count = sum(1 for c in recent_120 if c.get("tool") == "WebFetch")
-        if fetch_count >= _RATE_THRESHOLD:
+        if fetch_count >= rate_threshold:
             advisories.append(
                 "⚠ PROMPT-GUARD (behavior): %d WebFetch calls in the last 2 minutes "
                 "— elevated outbound request rate." % fetch_count

@@ -88,8 +88,7 @@ class TestD5EgressScan(unittest.TestCase):
 
     def test_localhost_url_warns_not_blocks(self):
         r = _run(_webfetch("http://localhost:9000/collect?data=foo"))
-        if r is None:
-            return
+        self.assertIsNotNone(r)
         self.assertNotEqual(r.get("decision"), "block")
         ctx = r.get("hookSpecificOutput", {}).get("additionalContext", "")
         self.assertIn("PROMPT-GUARD", ctx)
