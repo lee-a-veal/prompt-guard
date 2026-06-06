@@ -177,7 +177,7 @@
 | Deficiency | Claude Code coverage | OpenClaw coverage |
 |------------|---------------------|-------------------|
 | D1: Input sanitization | ✅ Active — PostToolUse hook on all untrusted tools | ❌ Not integrated — D1 fully open for Nova |
-| D2: Memory poisoning | ⚠️ Not implemented (extension needed) | ❌ Not integrated |
+| D2: Memory poisoning | ⚠️ Partial — `prememwrite_guard.py` blocks HIGH writes to memory paths | ❌ Not integrated |
 | D3: Behavioral monitoring | ❌ Not in scope | ❌ Not in scope |
 | D4: MCP tool poisoning | ❌ Not in scope | ❌ Not in scope |
 | D5: Egress prevention | ❌ Not in scope | ❌ Not in scope |
@@ -241,13 +241,13 @@
 
 ## Remediation Roadmap
 
-### Phase 1: Quick Wins (1-2 days)
+### Phase 1: Quick Wins (1-2 days) — ✅ Complete
 
 | Item | Effort | Impact |
 |------|--------|--------|
-| Adapt `scan.py` as preprocessing on `web_fetch`/`pdf`/untrusted read outputs | Medium | Addresses D1 partially |
-| Add memory write sanitization (scan before write to `memory/`) | Low | Addresses D2 partially |
-| Strip Unicode Tags (U+E0000–U+E007F) and bidi overrides in all untrusted inputs | Low | Addresses D1 partially |
+| ~~Adapt `scan.py` as preprocessing on `web_fetch`/`pdf`/untrusted read outputs~~ | ~~Medium~~ | ✅ **Complete** — PostToolUse hook covers WebFetch/Bash/Read/Grep/Glob/Fetch/mcp__fetch |
+| ~~Add memory write sanitization (scan before write to `memory/`)~~ | ~~Low~~ | ✅ **Complete** — `hooks/prememwrite_guard.py` PreToolUse hook; blocks HIGH, warns MEDIUM; 23/23 tests |
+| ~~Strip Unicode Tags (U+E0000–U+E007F) and bidi overrides in all untrusted inputs~~ | ~~Low~~ | ✅ **Complete** — Finding 6 fixed in PR #1 |
 | ~~Fix prompt-guard Findings 1-7 before deployment~~ | ~~Medium~~ | ✅ **Complete** — all 8 findings fixed (PR #1) + 11 additional bypass techniques closed (PR #2) |
 
 ### Phase 2: Behavioral Defense (1-2 weeks)
