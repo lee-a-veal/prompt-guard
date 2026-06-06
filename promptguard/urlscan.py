@@ -61,7 +61,10 @@ def scan(url):
             break  # one hit is sufficient; don't stack per-param
 
     # D5-2: base64-encoded parameter value (>=20 chars)
+    _b64_found = False
     for name, values in qs.items():
+        if _b64_found:
+            break
         for val in values:
             if _BASE64_RE.match(val):
                 score += 30
@@ -71,10 +74,8 @@ def scan(url):
                     "description": "Query parameter value resembles base64-encoded data",
                     "evidence": "param: %s = %s..." % (name, val[:24]),
                 })
+                _b64_found = True
                 break
-        else:
-            continue
-        break
 
     # D5-3: localhost/loopback with query parameters
     host = (parsed.hostname or "").lower()
