@@ -42,25 +42,27 @@ _BAND_ORDER = {"none": 0, "low": 1, "medium": 2, "high": 3}
 
 
 def _extract_text(tool_response):
-    """Pull human-readable text out of a tool response of unknown shape."""
+    """Pull human-readable text out of a tool response of unknown shape.
+
+    Scans ALL fields — not just a key whitelist — so injections hidden in
+    url, error, title, headers, metadata, warnings, etc. are not missed.
+    Non-string primitives (int, bool, float, None) are skipped.
+    """
     if tool_response is None:
         return ""
     if isinstance(tool_response, str):
         return tool_response
     if isinstance(tool_response, dict):
         parts = []
-        for key in ("output", "stdout", "content", "text", "result", "body", "data"):
-            val = tool_response.get(key)
-            if isinstance(val, str):
-                parts.append(val)
-            elif val is not None:
-                parts.append(_extract_text(val))
-        if parts:
-            return "\n".join(parts)
-        return json.dumps(tool_response, ensure_ascii=False)
+        for val in tool_response.values():
+            if isinstance(val, (str, dict, list)):
+                part = _extract_text(val)
+                if part.strip():
+                    parts.append(part)
+        return "\n".join(parts)
     if isinstance(tool_response, list):
         return "\n".join(_extract_text(x) for x in tool_response)
-    return str(tool_response)
+    return ""  # skip int, bool, float
 
 
 def _advisory(tool_name, result):

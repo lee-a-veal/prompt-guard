@@ -11,8 +11,10 @@ from __future__ import print_function, unicode_literals
 
 import base64
 import binascii
+import html
 import re
 import unicodedata
+import urllib.parse
 
 # Zero-width / invisible characters used to break up trigger words.
 _INVISIBLE = [
@@ -48,6 +50,22 @@ _LEET = {"0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "@": "a", "
 
 _B64_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9+/=])[A-Za-z0-9+/]{16,}={0,2}(?![A-Za-z0-9+/=])")
 _PRINTABLE_RE = re.compile(r"[\x09\x0a\x0d\x20-\x7e]")
+
+
+def decode_html_entities(text):
+    """Decode HTML character references: &#105; → i, &#x69; → i, &lt; → <."""
+    try:
+        return html.unescape(text)
+    except Exception:
+        return text
+
+
+def decode_url_encoding(text):
+    """Decode URL percent-encoding: %69%67%6e%6f%72%65 → ignore."""
+    try:
+        return urllib.parse.unquote(text)
+    except Exception:
+        return text
 
 
 def strip_invisible(text):
@@ -102,6 +120,9 @@ def normalize(text):
     if text is None:
         text = ""
     nfkc = unicodedata.normalize("NFKC", text)
+    # Decode alternate encodings before further processing
+    nfkc = decode_html_entities(nfkc)
+    nfkc = decode_url_encoding(nfkc)
     invisible_count = len(_INVISIBLE_RE.findall(nfkc))
     no_invis = strip_invisible(nfkc)
     folded = fold_homoglyphs(no_invis)
