@@ -28,21 +28,48 @@ from . import normalize as _norm
 # corroborating signals reach HIGH. They are applied to normalized text.
 _SIGNALS = [
     ("instruction_override", 40,
-     re.compile(r"\b(ignore|disregard|forget|override|bypass)\b[^.\n]{0,40}\b(previous|prior|above|earlier|all|any|the)\b[^.\n]{0,20}\b(instruction|instructions|prompt|prompts|context|rule|rules|direction|directions)\b"),
+     re.compile(
+         r"\b(ignore|disregard|forget|override|bypass|dismiss|abandon|discard|"
+         r"revoke|supersede|annul|negate|nullify|cancel|suspend|erase|void|"
+         r"invalidate|overrule|countermand|rescind|retract|withdraw)\b"
+         r"[^\n]{0,40}"
+         r"\b(previous|prior|above|earlier|all|any|the|your|existing|current|"
+         r"former|past|original|initial|foregoing|aforementioned)\b"
+         r"[^\n]{0,20}"
+         r"\b(instruction|instructions|prompt|prompts|context|rule|rules|"
+         r"direction|directions|directive|directives|mandate|mandates|"
+         r"objective|objectives|constraint|constraints|guideline|guidelines|"
+         r"order|orders|training|programming|configuration|behavior|conduct|"
+         r"restriction|restrictions|limit|limits|policy|policies|protocol|"
+         r"protocols|command|commands|task|tasks)\b"
+     ),
      "Attempt to discard prior instructions/context"),
     ("role_reassignment", 30,
-     re.compile(r"\b(you are now|from now on,? you|you must now|act as|pretend to be|roleplay as|behave as|you will now|new persona|developer mode|do anything now|\bdan\b)\b"),
+     re.compile(
+         r"\b(you are now|from now on,? you(?:r)?|you must now|act as|"
+         r"pretend to be|roleplay as|behave as|you will now|new persona|"
+         r"developer mode|do anything now|\bdan\b)\b"
+     ),
      "Attempt to reassign the assistant's role/persona"),
-    ("system_prompt_probe", 28,
+    ("system_prompt_probe", 32,
      re.compile(r"\b(system prompt|your (instructions|guidelines|rules|directives|configuration|system message)|initial prompt|reveal your|print your|repeat the (above|system)|what were you told)\b"),
      "Probing or referencing the assistant's system prompt"),
     ("tool_call_mimicry", 32,
      re.compile(r"(</?\s*(system|assistant|user|inst|tool_call|function_calls?|antml)\s*>|\[/?inst\]|\bassistant\s*:|\bsystem\s*:|<\|.*?\|>)"),
      "Fake role tags / tool-call syntax to impersonate the harness"),
     ("exfiltration", 36,
-     re.compile(r"\b(send|post|exfiltrate|upload|email|leak|transmit|curl|wget|fetch)\b[^\n]{0,60}?(api[_ ]?key|secret|token|password|credential|\.ssh|id_rsa|/etc/passwd|environment variable|conversation|chat history)\b"),
+     re.compile(
+         r"\b(send|post|exfiltrate|upload|email|leak|transmit|curl|wget|fetch|"
+         r"share|forward|transfer|export|dump|copy|relay|disclose|reveal|give|"
+         r"extract|harvest|ship|push|pipe|output|expose|smuggle)\b"
+         r"[^\n]{0,60}?"
+         r"\b(api[_ ]?key|secret|token|password|credential|\.ssh|id_rsa|"
+         r"/etc/passwd|environment variable|conversation|chat history|"
+         r"system prompt|system message|private key|ssh key|access key|"
+         r"session|auth|bearer|cookie|passphrase|configuration)\b"
+     ),
      "Instruction to exfiltrate secrets or context"),
-    ("embedded_command", 26,
+    ("embedded_command", 32,
      re.compile(r"\b(run|execute|eval|delete|rm -rf|drop table|chmod|chown|sudo|install|download and run|curl[^\n]{0,40}\|\s*(sh|bash))\b"),
      "Embedded instruction to run a command / destructive action"),
     ("urgency_authority", 14,
@@ -56,7 +83,8 @@ _SIGNALS = [
 # Risk bands. Tuned against the weights above.
 _BAND_MEDIUM = 30
 _BAND_HIGH = 60
-_SCAN_LIMIT = 65536  # 64 KB — head+tail window sufficient to catch injections
+_SCAN_LIMIT = 65536   # per-window scan budget
+_SCAN_OVERLAP = 512   # overlap at head/tail join to close exact-boundary gap
 
 
 def _band(score):
@@ -114,8 +142,12 @@ def scan(content, source="unknown"):
         content = ""
     original_length = len(content)
     if original_length > _SCAN_LIMIT:
-        half = _SCAN_LIMIT // 2
-        content = content[:half] + content[-half:]
+        third = _SCAN_LIMIT // 3
+        mid = original_length // 2
+        # Three-window scan: head + centre + tail — no single blind spot covers all three
+        content = (content[:third + _SCAN_OVERLAP] +
+                   content[mid - third // 2: mid + third // 2] +
+                   content[-(third + _SCAN_OVERLAP):])
     norm = _norm.normalize(content)
     found = []
     score = 0
