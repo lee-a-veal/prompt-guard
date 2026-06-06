@@ -178,10 +178,10 @@
 |------------|---------------------|-------------------|
 | D1: Input sanitization | ✅ Active — PostToolUse hook on all untrusted tools | ❌ Not integrated — D1 fully open for Nova |
 | D2: Memory poisoning | ⚠️ Partial — `prememwrite_guard.py` blocks HIGH writes to memory paths | ❌ Not integrated |
-| D3: Behavioral monitoring | ❌ Not in scope | ❌ Not in scope |
+| D3: Behavioral monitoring | ⚠️ Partial — rate spike + read-then-fetch detection via pretooluse_guard | ❌ Not integrated |
 | D4: MCP tool poisoning | ❌ Not in scope | ❌ Not in scope |
-| D5: Egress prevention | ❌ Not in scope | ❌ Not in scope |
-| D6: Multi-turn staging | ⚠️ Per-input only, no session tracking | ❌ Not integrated |
+| D5: Egress prevention | ⚠️ Partial — URL exfiltration scan blocks HIGH, warns MEDIUM | ❌ Not integrated |
+| D6: Multi-turn staging | ⚠️ Partial — session taint counter warns at threshold | ❌ Not integrated |
 | D7: Taint tracking | ❌ Not in scope | ❌ Not in scope |
 | D9: Advisory paradox | ⚠️ SKILL.md flags suppression as MALICIOUS signal | ❌ Not integrated |
 
@@ -250,14 +250,14 @@
 | ~~Strip Unicode Tags (U+E0000–U+E007F) and bidi overrides in all untrusted inputs~~ | ~~Low~~ | ✅ **Complete** — Finding 6 fixed in PR #1 |
 | ~~Fix prompt-guard Findings 1-7 before deployment~~ | ~~Medium~~ | ✅ **Complete** — all 8 findings fixed (PR #1) + 11 additional bypass techniques closed (PR #2) |
 
-### Phase 2: Behavioral Defense (1-2 weeks)
+### Phase 2: Behavioral Defense (1-2 weeks) — ✅ Complete
 
 | Item | Effort | Impact |
 |------|--------|--------|
-| Add Stage 2 LLM-as-judge (conditional, medium+ threshold) | Medium | Addresses D1 fully |
-| Implement behavioral tool-call monitoring | Medium | Addresses D3 |
-| Add session-level untrusted content ratio tracking | Medium | Addresses D6 partially |
-| Add egress domain allowlisting | Low | Addresses D5 partially |
+| ~~Add Stage 2 LLM-as-judge (conditional, medium+ threshold)~~ | ~~Medium~~ | ✅ **Complete** — skill + PostToolUse escalation already implemented |
+| ~~Implement behavioral tool-call monitoring~~ | ~~Medium~~ | ✅ **Complete** — `hooks/pretooluse_guard.py` D3: read-then-fetch + rate spike |
+| ~~Add session-level untrusted content ratio tracking~~ | ~~Medium~~ | ✅ **Complete** — `promptguard/session.py` + D6 taint threshold check |
+| ~~Add egress domain allowlisting~~ | ~~Low~~ | ✅ **Complete** — `promptguard/urlscan.py` + D5 block/warn in pretooluse_guard |
 
 ### Phase 3: Architectural Hardening (ongoing)
 
