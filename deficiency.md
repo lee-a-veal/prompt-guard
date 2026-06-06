@@ -1,7 +1,7 @@
 # Prompt Injection Defense Deficiency Assessment
 
 **Created**: 2026-06-06 | **Last reviewed**: 2026-06-06 (independent review by Claude Code)  
-**Scope**: OpenClaw agent (this system) — current defense posture, gaps, and remediation roadmap  
+**Scope**: current defense posture, gaps, and remediation roadmap  
 **Context**: Assessment conducted after deep-dive research into prompt injection attacks and defenses (see `artifacts/research/prompt-injection-defense/`)
 
 ---
