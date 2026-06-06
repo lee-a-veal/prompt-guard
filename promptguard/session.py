@@ -7,7 +7,7 @@ I/O failure must never affect hook output or exit code.
 
 Python 3.6.8 compatible. No third-party dependencies.
 """
-from __future__ import print_function, unicode_literals
+from __future__ import unicode_literals
 
 import hashlib
 import json
@@ -66,12 +66,17 @@ def save(state):
             json.dump(state, fh)
         os.rename(tmp, path)
     except Exception:
-        pass
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
 
 
 def record_taint(tool_name):
     """Increment taint_count and append tool_name to tainted_sources."""
     try:
+        # load-modify-save is not atomic; concurrent hook processes may lose one
+        # increment. Acceptable for a behavioral counter with no locking available.
         state = load()
         state["taint_count"] = state.get("taint_count", 0) + 1
         sources = state.get("tainted_sources", [])
@@ -86,6 +91,8 @@ def record_taint(tool_name):
 def record_tool_call(tool_name, label=""):
     """Append a tool-call entry; trim to _MAX_TOOL_CALLS oldest entries."""
     try:
+        # load-modify-save is not atomic; concurrent hook processes may lose one
+        # entry. Acceptable for a behavioral log with no locking available.
         state = load()
         calls = state.get("tool_calls", [])
         calls.append({"ts": time.time(), "tool": tool_name, "label": label})
