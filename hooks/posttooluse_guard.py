@@ -31,6 +31,12 @@ except Exception as exc:  # pragma: no cover - import guard
     print(json.dumps({"systemMessage": "prompt-guard hook import failed: %s" % exc}))
     sys.exit(0)
 
+try:
+    from promptguard import session as _session
+    _SESSION_OK = True
+except Exception:
+    _SESSION_OK = False
+
 # Untrusted surfaces: outputs originate outside the operator's keyboard.
 _DEFAULT_TOOLS = "WebFetch,Bash,Read,Grep,Glob,Fetch,mcp__fetch"
 _WATCHED = set(
@@ -39,6 +45,25 @@ _WATCHED = set(
 # Minimum band that triggers an advisory. 'medium' by default.
 _MIN_BAND = os.environ.get("PROMPTGUARD_MIN_BAND", "medium").lower()
 _BAND_ORDER = {"none": 0, "low": 1, "medium": 2, "high": 3}
+
+
+def _extract_label(tool_name, tool_input):
+    """Short diagnostic label from tool_input for session logging."""
+    if not tool_input:
+        return ""
+    if tool_name == "WebFetch":
+        return str(tool_input.get("url") or "")[:80]
+    if tool_name == "Bash":
+        return str(tool_input.get("command") or "")[:60]
+    if tool_name in ("Read", "Write"):
+        return str(tool_input.get("file_path") or "")[:80]
+    if tool_name == "Grep":
+        pat = str(tool_input.get("pattern") or "")[:40]
+        path = str(tool_input.get("path") or "")[:40]
+        return (pat + " in " + path) if (pat and path) else (pat or path)
+    if tool_name == "Glob":
+        return str(tool_input.get("pattern") or "")[:80]
+    return ""
 
 
 def _extract_text(tool_response):
@@ -95,6 +120,13 @@ def main():
     if tool_name not in _WATCHED:
         sys.exit(0)
 
+    label = _extract_label(tool_name, event.get("tool_input"))
+    if _SESSION_OK:
+        try:
+            _session.record_tool_call(tool_name, label)
+        except Exception:
+            pass
+
     text = _extract_text(event.get("tool_response"))
     if not text.strip():
         sys.exit(0)
@@ -114,6 +146,11 @@ def main():
             "additionalContext": _advisory(tool_name, result),
         }
     }
+    if _SESSION_OK:
+        try:
+            _session.record_taint(tool_name)
+        except Exception:
+            pass
     print(json.dumps(out, ensure_ascii=False))
     sys.exit(0)
 
