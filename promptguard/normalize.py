@@ -47,6 +47,8 @@ _HOMOGLYPHS = {
     "ι": "i", "ο": "o", "λ": "l", "μ": "m", "ρ": "r",
     "σ": "s", "ς": "s", "τ": "t", "υ": "y", "φ": "f",
     "ω": "o",
+    # P1: remaining Greek lowercase homoglyphs
+    "κ": "k", "η": "n", "χ": "x", "γ": "y",
 }
 
 # Leetspeak folding, applied only for matching (not shown back to the user).
@@ -159,6 +161,11 @@ def normalize(text):
     # (e.g. &#65353; → ｉ) that NFKC must fold to ASCII equivalents.
     nfkc = unicodedata.normalize("NFKC", nfkc)
     # Strip combining marks (e.g. U+0336 stroke overlay used to break \b matching).
+    nfkc = strip_combining(nfkc)
+    # P0: NFKC may have produced precomposed accented Latin chars (e.g. ï U+00EF from i+U+0308).
+    # Those are category Ll (not Mn), so strip_combining above missed them.
+    # NFD decomposes them back into base-letter + combining-mark; strip_combining then removes the mark.
+    nfkc = unicodedata.normalize("NFD", nfkc)
     nfkc = strip_combining(nfkc)
     invisible_count = len(_INVISIBLE_RE.findall(nfkc))
     no_invis = strip_invisible(nfkc)
