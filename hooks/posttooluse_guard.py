@@ -66,27 +66,32 @@ def _extract_label(tool_name, tool_input):
     return ""
 
 
-def _extract_text(tool_response):
+def _extract_text(tool_response, _depth=0):
     """Pull human-readable text out of a tool response of unknown shape.
 
-    Scans ALL fields — not just a key whitelist — so injections hidden in
-    url, error, title, headers, metadata, warnings, etc. are not missed.
-    Non-string primitives (int, bool, float, None) are skipped.
+    Scans ALL keys AND values — injections hidden in dict keys, url, error,
+    title, headers, metadata, etc. are not missed. Non-string primitives
+    (int, bool, float, None) are skipped. Depth-limited to avoid stack
+    overflow on pathologically nested responses.
     """
+    if _depth > 10:
+        return ""
     if tool_response is None:
         return ""
     if isinstance(tool_response, str):
         return tool_response
     if isinstance(tool_response, dict):
         parts = []
-        for val in tool_response.values():
+        for key, val in tool_response.items():
+            if isinstance(key, str) and key.strip():
+                parts.append(key)
             if isinstance(val, (str, dict, list)):
-                part = _extract_text(val)
+                part = _extract_text(val, _depth + 1)
                 if part.strip():
                     parts.append(part)
         return "\n".join(parts)
     if isinstance(tool_response, list):
-        return "\n".join(_extract_text(x) for x in tool_response)
+        return "\n".join(_extract_text(x, _depth + 1) for x in tool_response)
     return ""  # skip int, bool, float
 
 

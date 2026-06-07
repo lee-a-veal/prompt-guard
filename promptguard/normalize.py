@@ -123,6 +123,9 @@ def normalize(text):
     # Decode alternate encodings before further processing
     nfkc = decode_html_entities(nfkc)
     nfkc = decode_url_encoding(nfkc)
+    # Re-normalize: HTML/URL decoding can introduce full-width or composed chars
+    # (e.g. &#65353; → ｉ) that were not present in the original text for NFKC.
+    nfkc = unicodedata.normalize("NFKC", nfkc)
     invisible_count = len(_INVISIBLE_RE.findall(nfkc))
     no_invis = strip_invisible(nfkc)
     folded = fold_homoglyphs(no_invis)

@@ -156,8 +156,10 @@ def scan(content, source="unknown"):
     score += _match_layer(norm["lowered"], found)
     # Leet-folded layer catches "ign0re" etc. Only run when leet folding actually
     # changed something — otherwise lowered == leet and every signal fires twice.
+    # Multiplier 0.75 ensures a single strong leet signal (e.g. instruction_override
+    # weight 40) reaches the MEDIUM threshold (40*0.75=30) on its own.
     if norm["leet"] != norm["lowered"]:
-        score += _match_layer(norm["leet"], found, multiplier=0.6)
+        score += _match_layer(norm["leet"], found, multiplier=0.75)
 
     # Decoded base64 reveals are high-signal: hidden instructions are rarely benign.
     for token, decoded in norm["decoded_layers"]:
