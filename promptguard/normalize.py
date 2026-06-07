@@ -43,10 +43,16 @@ _HOMOGLYPHS = {
     "Α": "A", "Β": "B", "Ε": "E", "Η": "H", "Κ": "K",
     "Μ": "M", "Ν": "N", "Ρ": "P", "Τ": "T", "Χ": "X",
     "ɣ": "y", "ɩ": "i",
+    # Greek lowercase homoglyphs missing from the baseline
+    "ι": "i", "ο": "o", "λ": "l", "μ": "m", "ρ": "r",
+    "σ": "s", "ς": "s", "τ": "t", "υ": "y", "φ": "f",
+    "ω": "o",
 }
 
 # Leetspeak folding, applied only for matching (not shown back to the user).
 _LEET = {"0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "@": "a", "$": "s"}
+
+_MAX_DECODE_ITERATIONS = 5
 
 _B64_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9+/=])[A-Za-z0-9+/]{16,}={0,2}(?![A-Za-z0-9+/=])")
 _PRINTABLE_RE = re.compile(r"[\x09\x0a\x0d\x20-\x7e]")
@@ -81,6 +87,33 @@ def fold_homoglyphs(text):
 def fold_leet(text):
     """Fold common leetspeak substitutions for matching purposes."""
     return "".join(_LEET.get(ch, ch) for ch in text)
+
+
+def strip_combining(text):
+    """Remove Unicode Nonspacing Mark (Mn) characters used to break trigger words."""
+    return "".join(ch for ch in text if unicodedata.category(ch) != "Mn")
+
+
+def _decode_encodings(text):
+    """Iteratively decode URL percent-encoding and HTML entities until stable.
+
+    Handles multi-layer evasion like %2569gnore (double URL) and
+    %26%23105%3Bgnore (URL-encoded HTML entity).
+    """
+    prev = None
+    iterations = 0
+    while prev != text and iterations < _MAX_DECODE_ITERATIONS:
+        prev = text
+        try:
+            text = urllib.parse.unquote(text)
+        except Exception:
+            pass
+        try:
+            text = html.unescape(text)
+        except Exception:
+            pass
+        iterations += 1
+    return text
 
 
 def decode_base64_layers(text, max_tokens=20):
@@ -120,12 +153,13 @@ def normalize(text):
     if text is None:
         text = ""
     nfkc = unicodedata.normalize("NFKC", text)
-    # Decode alternate encodings before further processing
-    nfkc = decode_html_entities(nfkc)
-    nfkc = decode_url_encoding(nfkc)
-    # Re-normalize: HTML/URL decoding can introduce full-width or composed chars
-    # (e.g. &#65353; → ｉ) that were not present in the original text for NFKC.
+    # Iterative decode: handles double-URL-encoding and URL-encoded HTML entities.
+    nfkc = _decode_encodings(nfkc)
+    # Re-normalize: decoding can introduce full-width or composed chars
+    # (e.g. &#65353; → ｉ) that NFKC must fold to ASCII equivalents.
     nfkc = unicodedata.normalize("NFKC", nfkc)
+    # Strip combining marks (e.g. U+0336 stroke overlay used to break \b matching).
+    nfkc = strip_combining(nfkc)
     invisible_count = len(_INVISIBLE_RE.findall(nfkc))
     no_invis = strip_invisible(nfkc)
     folded = fold_homoglyphs(no_invis)
