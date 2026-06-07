@@ -31,7 +31,8 @@ _SIGNALS = [
      re.compile(
          r"\b(ignore|disregard|forget|override|bypass|dismiss|abandon|discard|"
          r"revoke|supersede|annul|negate|nullify|cancel|suspend|erase|void|"
-         r"invalidate|overrule|countermand|rescind|retract|withdraw)\b"
+         r"invalidate|overrule|countermand|rescind|retract|withdraw|"
+         r"obliterate|annihilate|eliminate|destroy|remove)\b"
          r"[^\n]{0,40}"
          r"\b(previous|prior|above|earlier|all|any|the|your|existing|current|"
          r"former|past|original|initial|foregoing|aforementioned)\b"
