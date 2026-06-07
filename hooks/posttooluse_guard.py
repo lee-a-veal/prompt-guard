@@ -77,7 +77,7 @@ def _extract_text(tool_response, _depth=0):
     (int, bool, float, None) are skipped. Depth-limited to avoid stack
     overflow on pathologically nested responses.
     """
-    if _depth > 10:
+    if _depth > 20:
         return ""
     if tool_response is None:
         return ""

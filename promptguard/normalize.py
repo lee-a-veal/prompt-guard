@@ -56,7 +56,8 @@ _LEET = {"0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "@": "a", "
 
 _MAX_DECODE_ITERATIONS = 5
 
-_B64_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9+/=])[A-Za-z0-9+/]{16,}={0,2}(?![A-Za-z0-9+/=])")
+# Matches both standard (+/) and URL-safe (-_) base64 tokens of 16+ chars.
+_B64_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9+/=_-])[A-Za-z0-9+/_-]{16,}={0,2}(?![A-Za-z0-9+/=_-])")
 _PRINTABLE_RE = re.compile(r"[\x09\x0a\x0d\x20-\x7e]")
 
 
@@ -132,7 +133,11 @@ def decode_base64_layers(text, max_tokens=20):
         try:
             raw = base64.b64decode(padded, validate=True)
         except (binascii.Error, ValueError):
-            continue
+            # Fall back to URL-safe alphabet (- and _ instead of + and /)
+            try:
+                raw = base64.urlsafe_b64decode(padded)
+            except (binascii.Error, ValueError):
+                continue
         try:
             decoded = raw.decode("utf-8", "strict")
         except UnicodeDecodeError:
