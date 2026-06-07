@@ -16,6 +16,15 @@ import time
 
 _DEFAULT_WINDOW = 4 * 3600  # seconds
 _MAX_TOOL_CALLS = 200
+_MAX_TAINT_LOG = 500
+_DEFAULT_TAINT_DECAY = 3600  # 1 hour sliding window for taint count
+
+
+def _taint_decay_window():
+    try:
+        return int(os.environ.get("PROMPTGUARD_TAINT_DECAY_WINDOW", str(_DEFAULT_TAINT_DECAY)))
+    except (ValueError, TypeError):
+        return _DEFAULT_TAINT_DECAY
 
 
 def _session_path():
@@ -39,8 +48,9 @@ def _empty():
     return {
         "session_start": now,
         "last_seen": now,
-        "taint_count": 0,
+        "taint_count": 0,      # kept for backward compat with old session files
         "tainted_sources": [],
+        "taint_log": [],       # timestamped log; get_taint_count() uses this for decay
         "tool_calls": [],
     }
 
@@ -73,16 +83,26 @@ def save(state):
 
 
 def record_taint(tool_name):
-    """Increment taint_count and append tool_name to tainted_sources."""
+    """Record a taint event. Appends a timestamped entry to taint_log for decay support."""
     try:
         # load-modify-save is not atomic; concurrent hook processes may lose one
         # increment. Acceptable for a behavioral counter with no locking available.
         state = load()
+        now = time.time()
+        # Legacy integer counter — kept so old readers (e.g. monitoring scripts) still work.
         state["taint_count"] = state.get("taint_count", 0) + 1
         sources = state.get("tainted_sources", [])
         sources.append(tool_name)
+        if len(sources) > _MAX_TAINT_LOG:
+            sources = sources[-_MAX_TAINT_LOG:]
         state["tainted_sources"] = sources
-        state["last_seen"] = time.time()
+        # Timestamped log used by get_taint_count() for sliding-window decay.
+        log = state.get("taint_log", [])
+        log.append({"ts": now, "source": tool_name})
+        if len(log) > _MAX_TAINT_LOG:
+            log = log[-_MAX_TAINT_LOG:]
+        state["taint_log"] = log
+        state["last_seen"] = now
         save(state)
     except Exception:
         pass
@@ -106,9 +126,18 @@ def record_tool_call(tool_name, label=""):
 
 
 def get_taint_count():
-    """Return taint_count, or 0 on any error."""
+    """Return number of taint events within the decay window (default 1 hour).
+
+    Uses taint_log (timestamped) when present; falls back to legacy taint_count
+    integer for session files written before taint_log was introduced.
+    """
     try:
-        return load().get("taint_count", 0)
+        state = load()
+        log = state.get("taint_log")
+        if log is not None:
+            cutoff = time.time() - _taint_decay_window()
+            return sum(1 for t in log if t.get("ts", 0) >= cutoff)
+        return state.get("taint_count", 0)
     except Exception:
         return 0
 

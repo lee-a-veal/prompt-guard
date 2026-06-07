@@ -118,6 +118,44 @@ class TestSave(_Base):
         self.assertFalse(os.path.exists(self._path + ".tmp"))
 
 
+class TestTaintDecay(_Base):
+    """Taint count uses sliding window via taint_log (B-BA-2)."""
+
+    def test_recent_taint_counts(self):
+        session.record_taint("WebFetch")
+        self.assertEqual(session.get_taint_count(), 1)
+
+    def test_expired_taint_does_not_count(self):
+        state = session._empty()
+        # Inject a taint event outside the decay window
+        state["taint_log"] = [{"ts": 1.0, "source": "Bash"}]
+        session.save(state)
+        os.environ["PROMPTGUARD_TAINT_DECAY_WINDOW"] = "60"
+        try:
+            self.assertEqual(session.get_taint_count(), 0)
+        finally:
+            os.environ.pop("PROMPTGUARD_TAINT_DECAY_WINDOW", None)
+
+    def test_mixed_recent_and_expired(self):
+        now = time.time()
+        state = session._empty()
+        state["taint_log"] = [
+            {"ts": now - 7200, "source": "Bash"},   # 2h ago — expired
+            {"ts": now - 1800, "source": "Read"},   # 30m ago — within 1h window
+            {"ts": now - 10,   "source": "WebFetch"},  # recent
+        ]
+        session.save(state)
+        self.assertEqual(session.get_taint_count(), 2)
+
+    def test_legacy_session_without_taint_log(self):
+        # Old session files have taint_count but no taint_log — must fall back.
+        state = session._empty()
+        del state["taint_log"]
+        state["taint_count"] = 5
+        session.save(state)
+        self.assertEqual(session.get_taint_count(), 5)
+
+
 class TestCustomWindow(_Base):
     def test_custom_window_env(self):
         os.environ["PROMPTGUARD_SESSION_WINDOW"] = "7200"

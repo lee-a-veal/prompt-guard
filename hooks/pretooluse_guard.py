@@ -12,6 +12,7 @@ from __future__ import print_function, unicode_literals
 
 import json
 import os
+import re
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -28,13 +29,27 @@ except Exception:
 _WATCHED = {"WebFetch", "Bash"}
 _READ_TOOLS = {"Read", "Grep", "Glob"}
 
+# URL pattern in shell command strings — stops at whitespace and shell metacharacters.
+_BASH_URL_RE = re.compile(r"""https?://[^\s"'`<>|;&)(]+""")
+# File-reading verbs in Bash command labels (for D3 read-then-fetch).
+_FILE_READ_RE = re.compile(r"\b(cat|head|tail|less|grep|find|awk|sed)\b")
+# Network-fetch verbs in Bash command labels (for D3 rate spike).
+_NET_VERB_RE = re.compile(r"\b(curl|wget|scp|rsync)\b")
+
 
 def _check_d5(tool_name, tool_input):
     """Return ("block", reason) or (None, advisory_str_or_None)."""
     url_scan_on = os.environ.get("PROMPTGUARD_URL_SCAN", "on").lower() != "off"
-    if tool_name != "WebFetch" or not url_scan_on or _urlscan is None:
+    if not url_scan_on or _urlscan is None:
         return None, None
-    url = (tool_input.get("url") or "") if tool_input else ""
+    url = ""
+    if tool_name == "WebFetch":
+        url = (tool_input.get("url") or "") if tool_input else ""
+    elif tool_name == "Bash":
+        cmd = (tool_input.get("command") or "") if tool_input else ""
+        m = _BASH_URL_RE.search(cmd)
+        if m:
+            url = m.group(0)
     if not url:
         return None, None
     try:
@@ -46,15 +61,15 @@ def _check_d5(tool_name, tool_input):
     sig_ids = ", ".join(sorted(set(s["id"] for s in result.get("signals", [])))) or "url signals"
     if band == "high":
         return "block", (
-            "prompt-guard blocked WebFetch: URL scored %d/100 HIGH (%s). "
+            "prompt-guard blocked %s: URL scored %d/100 HIGH (%s). "
             "The URL contains patterns associated with credential exfiltration. "
-            "Review the URL before fetching." % (score, sig_ids)
+            "Review the URL before proceeding." % (tool_name, score, sig_ids)
         )
     if band == "medium":
         return None, (
-            "⚠ PROMPT-GUARD (egress): URL scored %d/100 MEDIUM (%s). "
-            "Verify this fetch does not carry sensitive data in query parameters."
-            % (score, sig_ids)
+            "⚠ PROMPT-GUARD (egress): %s URL scored %d/100 MEDIUM (%s). "
+            "Verify this does not carry sensitive data in query parameters."
+            % (tool_name, score, sig_ids)
         )
     return None, None
 
@@ -91,7 +106,14 @@ def _check_d3(tool_name):
     advisories = []
     try:
         recent_60 = _session.get_recent_calls(60)
-        if any(c.get("tool") in _READ_TOOLS for c in recent_60):
+        has_read = any(c.get("tool") in _READ_TOOLS for c in recent_60)
+        if not has_read:
+            # Also catch file reads via Bash (cat/head/tail/etc. in the command label).
+            for c in recent_60:
+                if c.get("tool") == "Bash" and _FILE_READ_RE.search(c.get("label", "")):
+                    has_read = True
+                    break
+        if has_read:
             advisories.append(
                 "⚠ PROMPT-GUARD (behavior): a file read preceded this WebFetch within "
                 "60s — verify this fetch is not sending file contents externally."
@@ -101,10 +123,16 @@ def _check_d3(tool_name):
     try:
         recent_120 = _session.get_recent_calls(120)
         fetch_count = sum(1 for c in recent_120 if c.get("tool") == "WebFetch")
-        if fetch_count >= rate_threshold:
+        # Count Bash commands with network verbs (curl/wget/scp/rsync) toward the rate.
+        bash_fetch_count = sum(
+            1 for c in recent_120
+            if c.get("tool") == "Bash" and _NET_VERB_RE.search(c.get("label", ""))
+        )
+        total_fetch = fetch_count + bash_fetch_count
+        if total_fetch >= rate_threshold:
             advisories.append(
-                "⚠ PROMPT-GUARD (behavior): %d WebFetch calls in the last 2 minutes "
-                "— elevated outbound request rate." % fetch_count
+                "⚠ PROMPT-GUARD (behavior): %d outbound request(s) in the last 2 minutes "
+                "— elevated network activity." % total_fetch
             )
     except Exception:
         pass

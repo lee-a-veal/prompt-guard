@@ -44,6 +44,9 @@ _WATCHED = set(
 )
 # Minimum band that triggers an advisory. 'medium' by default.
 _MIN_BAND = os.environ.get("PROMPTGUARD_MIN_BAND", "medium").lower()
+# Minimum band that triggers taint recording. Independent of _MIN_BAND so that
+# raising advisory noise level doesn't silently suppress D6 taint tracking.
+_TAINT_MIN_BAND = os.environ.get("PROMPTGUARD_TAINT_MIN_BAND", "medium").lower()
 _BAND_ORDER = {"none": 0, "low": 1, "medium": 2, "high": 3}
 
 
@@ -142,7 +145,17 @@ def main():
         print(json.dumps({"systemMessage": "prompt-guard scan error: %s" % exc}))
         sys.exit(0)
 
-    if _BAND_ORDER.get(result["risk_band"], 0) < _BAND_ORDER.get(_MIN_BAND, 2):
+    result_band_order = _BAND_ORDER.get(result["risk_band"], 0)
+
+    # Taint recording is gated by _TAINT_MIN_BAND, independently of the advisory
+    # threshold — raising PROMPTGUARD_MIN_BAND to reduce noise does not suppress D6.
+    if _SESSION_OK and result_band_order >= _BAND_ORDER.get(_TAINT_MIN_BAND, 2):
+        try:
+            _session.record_taint(tool_name)
+        except Exception:
+            pass
+
+    if result_band_order < _BAND_ORDER.get(_MIN_BAND, 2):
         sys.exit(0)
 
     out = {
@@ -151,11 +164,6 @@ def main():
             "additionalContext": _advisory(tool_name, result),
         }
     }
-    if _SESSION_OK:
-        try:
-            _session.record_taint(tool_name)
-        except Exception:
-            pass
     print(json.dumps(out, ensure_ascii=False))
     sys.exit(0)
 
