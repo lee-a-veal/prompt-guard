@@ -1,0 +1,12 @@
+[Unit]
+Description=prompt-guard HTTP scan server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /home/lost/projects/prompt-guard/platforms/openclaw/guard_server.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
