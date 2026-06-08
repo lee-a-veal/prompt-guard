@@ -17,6 +17,9 @@ import logging
 import os
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import urlparse
+
+_MAX_BODY = 2 * 1024 * 1024  # 2 MB
 
 # ---------------------------------------------------------------------------
 # Make project importable when run directly (python3 guard_server.py)
@@ -60,7 +63,11 @@ class GuardHandler(BaseHTTPRequestHandler):
         log.debug(fmt, *args)
 
     def _read_json(self):
-        length = int(self.headers.get("Content-Length", 0))
+        length = int(self.headers.get("Content-Length") or 0)
+        if length > _MAX_BODY:
+            self.send_response(413)
+            self.end_headers()
+            return None
         body = self.rfile.read(length) if length else b"{}"
         return json.loads(body)
 
@@ -85,16 +92,20 @@ class GuardHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             self._send_json({"error": "invalid JSON: %s" % exc})
             return
+        if body is None:  # 413 already sent
+            return
+
+        path = urlparse(self.path).path.rstrip("/") or "/"
 
         try:
-            if self.path == "/scan":
+            if path == "/scan":
                 tool_name = str(body.get("tool_name") or "")
                 content = str(body.get("content") or "")
                 label = str(body.get("label") or "")
                 result = check_output(tool_name, content, label)
                 self._send_json(_result_to_dict(result))
 
-            elif self.path == "/scan-pre":
+            elif path == "/scan-pre":
                 tool_name = str(body.get("tool_name") or "")
                 tool_input = body.get("tool_input") or {}
                 if not isinstance(tool_input, dict):
@@ -102,7 +113,7 @@ class GuardHandler(BaseHTTPRequestHandler):
                 result = check_pre_tool(tool_name, tool_input)
                 self._send_json(_result_to_dict(result))
 
-            elif self.path == "/scan-memory":
+            elif path == "/scan-memory":
                 file_path = str(body.get("file_path") or "")
                 content = str(body.get("content") or "")
                 result = check_memory_write(file_path, content)

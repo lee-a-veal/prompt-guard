@@ -39,10 +39,6 @@ except Exception:
 # ---------------------------------------------------------------------------
 _MIN_BAND = os.environ.get("PROMPTGUARD_MIN_BAND", "medium").lower()
 _TAINT_MIN_BAND = os.environ.get("PROMPTGUARD_TAINT_MIN_BAND", "medium").lower()
-try:
-    _TAINT_THRESHOLD = int(os.environ.get("PROMPTGUARD_TAINT_THRESHOLD", "3"))
-except (ValueError, TypeError):
-    _TAINT_THRESHOLD = 3
 _URL_SCAN_ON = os.environ.get("PROMPTGUARD_URL_SCAN", "on").lower() != "off"
 
 _raw_mem = os.environ.get("PROMPTGUARD_MEMORY_PATHS", "").strip()
@@ -85,6 +81,7 @@ _D2_TOOLS = {"write_file", "patch"}
 
 
 def _canonical(tool_name):
+    tool_name = tool_name or ""
     return _CANONICAL.get(tool_name, tool_name.lower())
 
 
@@ -160,7 +157,7 @@ def _advisory_output(tool_name, result):
 # ---------------------------------------------------------------------------
 # GuardResult
 # ---------------------------------------------------------------------------
-@dataclass
+@dataclass(frozen=True)
 class GuardResult:
     risk_score: int = 0
     risk_band: str = "none"
