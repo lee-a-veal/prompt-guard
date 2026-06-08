@@ -2,12 +2,15 @@
 
 [![Repo](https://img.shields.io/badge/GitHub-prompt--guard-181717?logo=github)](https://github.com/lee-a-veal/prompt-guard)
 
-Indirect prompt-injection detection for **Claude Code's own tool outputs**.
+Indirect prompt-injection detection for **AI agent tool outputs**.
 
-When Claude reads a web page, file, command output, or API response, malicious
+When an agent reads a web page, file, command output, or API response, malicious
 instructions hidden in that content can hijack the agent — tell it to exfiltrate
 keys, run commands, or change its goal. prompt-guard sits on that **data plane**
-and flags untrusted content before Claude acts on it.
+and flags untrusted content before the agent acts on it.
+
+Supports Claude Code, Hermes, and OpenClaw/Grok. See [HOOKS.md](HOOKS.md) for
+platform setup guides.
 
 ## Why not just validate inputs?
 
