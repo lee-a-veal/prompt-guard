@@ -1,0 +1,7 @@
+name: prompt-guard
+version: "0.1.0"
+description: "Scan untrusted tool outputs for prompt injection and scan URLs/writes for exfiltration and memory poisoning. Uses the promptguard scanner (heuristic + session taint tracking) to detect injection signals in web fetches, shell output, file reads, and memory writes. HIGH-risk content is blocked pre-execution; MEDIUM-risk content is flagged in tool results."
+author: "lee-a-veal / NousResearch (Hermes plugin port)"
+hooks:
+  - pre_tool_call
+  - transform_tool_result
