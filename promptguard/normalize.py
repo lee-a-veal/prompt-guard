@@ -49,6 +49,10 @@ _HOMOGLYPHS = {
     "ω": "o",
     # P1: remaining Greek lowercase homoglyphs
     "κ": "k", "η": "n", "χ": "x", "γ": "y",
+    # QA: additional Greek homoglyphs with clear ASCII visual similarity
+    "α": "a", "ε": "e", "ν": "v", "β": "b", "δ": "d",
+    # Greek uppercase gaps
+    "Ι": "I", "Υ": "Y", "Ζ": "Z",
 }
 
 # Leetspeak folding, applied only for matching (not shown back to the user).
