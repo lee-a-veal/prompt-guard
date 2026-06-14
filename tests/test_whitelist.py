@@ -19,10 +19,10 @@ def _write_conf(path, text):
 
 
 class TestLoad(unittest.TestCase):
-    def setUp(self):
-        # Reset module cache before each test
+    def tearDown(self):
         wl._cache_key = None
         wl._cache_entries = []
+        os.environ.pop("PROMPTGUARD_WHITELIST_FILE", None)
 
     def test_missing_file_returns_empty(self):
         os.environ["PROMPTGUARD_WHITELIST_FILE"] = "/tmp/no_such_file_prompt_guard.conf"
@@ -43,7 +43,6 @@ class TestLoad(unittest.TestCase):
             ])
         finally:
             os.unlink(path)
-            os.environ.pop("PROMPTGUARD_WHITELIST_FILE", None)
 
     def test_comments_and_blank_lines_skipped(self):
         fd, path = tempfile.mkstemp(suffix=".conf")
@@ -56,7 +55,6 @@ class TestLoad(unittest.TestCase):
             self.assertEqual(result, [("embedded_command", "eval")])
         finally:
             os.unlink(path)
-            os.environ.pop("PROMPTGUARD_WHITELIST_FILE", None)
 
     def test_malformed_line_skipped_others_kept(self):
         fd, path = tempfile.mkstemp(suffix=".conf")
@@ -69,7 +67,6 @@ class TestLoad(unittest.TestCase):
             self.assertEqual(result, [("embedded_command", "eval")])
         finally:
             os.unlink(path)
-            os.environ.pop("PROMPTGUARD_WHITELIST_FILE", None)
 
     def test_cache_hit_returns_same_list(self):
         fd, path = tempfile.mkstemp(suffix=".conf")
@@ -83,7 +80,6 @@ class TestLoad(unittest.TestCase):
             self.assertIs(first, second)
         finally:
             os.unlink(path)
-            os.environ.pop("PROMPTGUARD_WHITELIST_FILE", None)
 
     def test_cache_invalidated_on_mtime_change(self):
         fd, path = tempfile.mkstemp(suffix=".conf")
@@ -93,18 +89,18 @@ class TestLoad(unittest.TestCase):
             os.environ["PROMPTGUARD_WHITELIST_FILE"] = path
             wl._cache_key = None
             first = wl.load()
-            # Force mtime change by writing new content and bumping mtime
-            time.sleep(0.05)
+            self.assertEqual(first, [("embedded_command", "eval")])
+
+            # Write new content and bump mtime so load() detects the change
             _write_conf(path, "instruction_override: ignore\n")
             future = os.path.getmtime(path) + 1
             os.utime(path, (future, future))
-            wl._cache_key = None  # simulate mtime change detection
+            # Do NOT reset _cache_key — load() must detect the mtime change itself
             second = wl.load()
             self.assertNotEqual(first, second)
             self.assertEqual(second, [("instruction_override", "ignore")])
         finally:
             os.unlink(path)
-            os.environ.pop("PROMPTGUARD_WHITELIST_FILE", None)
 
 
 class TestIsSuppressed(unittest.TestCase):

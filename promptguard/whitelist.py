@@ -76,7 +76,7 @@ def is_suppressed(signal, entries):
     entries — list of (signal_id, pattern) pairs from load()
     """
     sig_id = signal.get("id", "")
-    evidence = signal.get("evidence", "").lower()
+    evidence = (signal.get("evidence") or "").lower()
     for entry_id, pattern in entries:
         if entry_id == sig_id and pattern.lower() in evidence:
             return True
