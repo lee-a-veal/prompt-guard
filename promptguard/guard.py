@@ -224,7 +224,7 @@ def check_output(tool_name, content, label=""):
         filtered = _whitelist.filter_signals(result["signals"], entries)
     else:
         filtered = result["signals"]
-    filtered_score = min(100, sum(s["weight"] for s in filtered))
+    filtered_score = min(100, sum(s.get("weight", 0) for s in filtered))
     filtered_band = _band_from_score(filtered_score)
     filtered_band_order = _BAND_ORDER.get(filtered_band, 0)
 
@@ -342,7 +342,7 @@ def check_memory_write(file_path, content):
         signals = _whitelist.filter_signals(result["signals"], entries)
     else:
         signals = result["signals"]
-    score = min(100, sum(s["weight"] for s in signals))
+    score = min(100, sum(s.get("weight", 0) for s in signals))
     band = _band_from_score(score)
     sig_ids = ", ".join(sorted(set(s["id"] for s in signals))) or "heuristic signals"
     basename = os.path.basename(file_path)
