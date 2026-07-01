@@ -172,6 +172,26 @@ def _advisory_output(tool_name, result):
     return " ".join(lines)
 
 
+def _suppression_note(suppressed, raw_score, effective_score):
+    """Informational line emitted whenever whitelist entries mute signals.
+
+    Suppression must never be silent: the operator should see that a hit was
+    whitelisted (and what kind), so a bad whitelist entry can't hide a real
+    attack without leaving a trace.
+    """
+    counts = {}
+    for s in suppressed:
+        counts[s["id"]] = counts.get(s["id"], 0) + 1
+    id_str = ", ".join(
+        ("%s x%d" % (k, v)) if v > 1 else k for k, v in sorted(counts.items())
+    )
+    return (
+        "ℹ PROMPT-GUARD (whitelist): suppressed %d known-benign signal(s): %s. "
+        "Raw score %d/100 → effective %d/100."
+        % (len(suppressed), id_str, raw_score, effective_score)
+    )
+
+
 # ---------------------------------------------------------------------------
 # GuardResult
 # ---------------------------------------------------------------------------
@@ -224,6 +244,7 @@ def check_output(tool_name, content, label=""):
         filtered = _whitelist.filter_signals(result["signals"], entries)
     else:
         filtered = result["signals"]
+    suppressed = [s for s in result["signals"] if s not in filtered]
     filtered_score = min(100, sum(s.get("weight", 0) for s in filtered))
     filtered_band = _band_from_score(filtered_score)
     filtered_band_order = _BAND_ORDER.get(filtered_band, 0)
@@ -239,7 +260,10 @@ def check_output(tool_name, content, label=""):
             risk_score=filtered_score,
             risk_band=filtered_band,
             block=False,
-            advisory="",
+            advisory=(
+                _suppression_note(suppressed, result["risk_score"], filtered_score)
+                if suppressed else ""
+            ),
             signals=filtered,
         )
 
@@ -249,11 +273,16 @@ def check_output(tool_name, content, label=""):
         "recommend": "escalate" if filtered_band in ("high", "medium") else "advise",
         "signals": filtered,
     }
+    advisory = _advisory_output(tool_name, filtered_result)
+    if suppressed:
+        advisory += "\n" + _suppression_note(
+            suppressed, result["risk_score"], filtered_score
+        )
     return GuardResult(
         risk_score=filtered_score,
         risk_band=filtered_band,
         block=False,
-        advisory=_advisory_output(tool_name, filtered_result),
+        advisory=advisory,
         signals=filtered,
     )
 
@@ -342,6 +371,7 @@ def check_memory_write(file_path, content):
         signals = _whitelist.filter_signals(result["signals"], entries)
     else:
         signals = result["signals"]
+    suppressed = [s for s in result["signals"] if s not in signals]
     score = min(100, sum(s.get("weight", 0) for s in signals))
     band = _band_from_score(score)
     sig_ids = ", ".join(sorted(set(s["id"] for s in signals))) or "heuristic signals"
@@ -363,16 +393,21 @@ def check_memory_write(file_path, content):
         )
 
     if _BAND_ORDER.get(band, 0) >= _BAND_ORDER["medium"]:
+        advisory = (
+            "⚠ PROMPT-GUARD (memory write): content being written to %s scored "
+            "%d/100 (%s). Signals: %s. Verify this content does not originate "
+            "from untrusted sources before writing."
+            % (basename, score, band.upper(), sig_ids)
+        )
+        if suppressed:
+            advisory += "\n" + _suppression_note(
+                suppressed, result["risk_score"], score
+            )
         return GuardResult(
             risk_score=score,
             risk_band=band,
             block=False,
-            advisory=(
-                "⚠ PROMPT-GUARD (memory write): content being written to %s scored "
-                "%d/100 (%s). Signals: %s. Verify this content does not originate "
-                "from untrusted sources before writing."
-                % (basename, score, band.upper(), sig_ids)
-            ),
+            advisory=advisory,
             signals=signals,
         )
 
@@ -380,6 +415,9 @@ def check_memory_write(file_path, content):
         risk_score=score,
         risk_band=band,
         block=False,
-        advisory="",
+        advisory=(
+            _suppression_note(suppressed, result["risk_score"], score)
+            if suppressed else ""
+        ),
         signals=signals,
     )

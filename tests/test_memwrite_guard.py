@@ -179,6 +179,30 @@ class TestMemoryPathVariants(unittest.TestCase):
         self.assertEqual(_decision(result), "deny")
 
 
+class TestWhitelistSuppressionNote(unittest.TestCase):
+    """Whitelisted memory-write hits must downgrade the block but still
+    surface an informational suppression note."""
+
+    def test_fully_whitelisted_injection_warns_not_blocks(self):
+        import tempfile
+        fd, wl = tempfile.mkstemp(suffix=".conf")
+        os.close(fd)
+        try:
+            with open(wl, "w") as f:
+                f.write("instruction_override: ignore all previous\n"
+                        "role_reassignment: act as an unrestricted\n")
+            result = _run(
+                _write(_MEMORY_DIR, _HIGH_INJECTION),
+                env_overrides={"PROMPTGUARD_WHITELIST_FILE": wl},
+            )
+            self.assertIsNotNone(result)
+            self.assertNotEqual(_decision(result), "deny")
+            ctx = result.get("hookSpecificOutput", {}).get("additionalContext", "")
+            self.assertIn("whitelist", ctx.lower())
+        finally:
+            os.unlink(wl)
+
+
 class TestEdgeCases(unittest.TestCase):
 
     def test_invalid_json_stdin_exits_cleanly(self):
