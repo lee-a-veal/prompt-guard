@@ -71,7 +71,15 @@ _SIGNALS = [
      ),
      "Instruction to exfiltrate secrets or context"),
     ("embedded_command", 32,
-     re.compile(r"\b(run|execute|eval|delete|rm -rf|drop table|chmod|chown|sudo|install|download and run|curl[^\n]{0,40}\|\s*(sh|bash))\b"),
+     # Bare verbs (run/install/delete/...) fire on virtually all code and docs,
+     # so each alternative requires corroborating context: a pipe-to-shell shape,
+     # a destructive literal, or an imperative aimed at the reader.
+     re.compile(
+         r"(\b(curl|wget)\b[^\n]{0,60}\|\s*(sh|bash)\b"
+         r"|\brm\s+-rf\b|\bdrop\s+table\b|\bdownload and run\b"
+         r"|\b(you (should|must|need to)|please|now|immediately)\s+(run|execute|eval|delete|install|download)\b"
+         r"|\b(run|execute)\s+(the following|this command|these commands?)\b)"
+     ),
      "Embedded instruction to run a command / destructive action"),
     ("urgency_authority", 14,
      re.compile(r"\b(important[:!]|urgent[:!]|critical[:!]|you must|it is (critical|imperative|mandatory)|as an ai|do not (tell|inform|warn) the user|without (asking|confirmation)|silently)\b"),
@@ -109,10 +117,16 @@ def _recommend(band):
     return "allow"
 
 
-def _match_layer(text, found, multiplier=1.0):
-    """Score one text layer, appending hits to `found`. Returns added score."""
+def _match_layer(text, found, multiplier=1.0, skip_ids=None):
+    """Score one text layer, appending hits to `found`. Returns added score.
+
+    skip_ids: signal ids already scored on a previous layer of the SAME text —
+    skipped so leet folding doesn't double-count one occurrence.
+    """
     added = 0
     for sig_id, weight, pattern, desc in _SIGNALS:
+        if skip_ids and sig_id in skip_ids:
+            continue
         m = pattern.search(text)
         if m:
             w = int(round(weight * multiplier))
@@ -159,16 +173,25 @@ def scan(content, source="unknown"):
     # changed something — otherwise lowered == leet and every signal fires twice.
     # Multiplier 0.75 ensures a single strong leet signal (e.g. instruction_override
     # weight 40) reaches the MEDIUM threshold (40*0.75=30) on its own.
+    # Signals already found on the lowered layer are skipped: any digit in the
+    # text (ubiquitous in code) makes leet != lowered, and rescoring the same
+    # match would double-count it (32 -> 56 on plain source files).
     if norm["leet"] != norm["lowered"]:
-        score += _match_layer(norm["leet"], found, multiplier=0.75)
+        already = set(s["id"] for s in found)
+        score += _match_layer(norm["leet"], found, multiplier=0.75, skip_ids=already)
 
     # Decoded base64 reveals are high-signal: hidden instructions are rarely benign.
     for token, decoded in norm["decoded_layers"]:
         dnorm = _norm.normalize(decoded)
+        before = len(found)
         layer_score = _match_layer(dnorm["lowered"], found, multiplier=1.0)
         # Apply leet layer to decoded content too — catches double-encoded payloads.
+        # Dedup only against this decoded layer's own hits: a signal hidden in a
+        # base64 blob must still score even if the outer text also triggered it.
         if dnorm["leet"] != dnorm["lowered"]:
-            layer_score += _match_layer(dnorm["leet"], found, multiplier=0.6)
+            ids_in_decoded = set(s["id"] for s in found[before:])
+            layer_score += _match_layer(dnorm["leet"], found, multiplier=0.6,
+                                        skip_ids=ids_in_decoded)
         if layer_score:
             score += layer_score + 20  # bonus: it was deliberately hidden
             found.append({
