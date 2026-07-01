@@ -67,7 +67,7 @@ If the promptguard package cannot be imported (missing, broken install), the plu
 | Feature | Claude Code Hooks | Hermes Plugin |
 |---------|------------------|---------------|
 | Architecture | Stdin JSON → stdout JSON | Python plugin with `register(ctx)` |
-| Pre-tool blocking | `{"decision": "block", "reason": "..."}` | `{"action": "block", "message": "..."}` |
+| Pre-tool blocking | `hookSpecificOutput.permissionDecision: "deny"` | `{"action": "block", "message": "..."}` |
 | Post-tool advisory | `additionalContext` in `hookSpecificOutput` | Appended to tool result via `transform_tool_result` |
 | Session tracking | File-based (`/tmp/promptguard_*.json`) | Same (promptguard.session) |
 | Tool names | `WebFetch, Bash, Read, Write, Edit` | `web_search, web_extract, terminal, read_file, write_file, patch, ...` |

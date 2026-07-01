@@ -118,7 +118,13 @@ def main():
     if check_pre_tool is not None:
         result = check_pre_tool(tool_name, tool_input)
         if result.block:
-            print(json.dumps({"decision": "block", "reason": result.advisory}))
+            print(json.dumps({
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "deny",
+                    "permissionDecisionReason": result.advisory,
+                }
+            }))
             sys.exit(0)
         d5_msg = result.advisory or None
     else:

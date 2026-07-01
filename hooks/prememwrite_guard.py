@@ -50,7 +50,13 @@ def main():
 
     result = check_memory_write(file_path, content)
     if result.block:
-        print(json.dumps({"decision": "block", "reason": result.advisory}))
+        print(json.dumps({
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny",
+                "permissionDecisionReason": result.advisory,
+            }
+        }))
         sys.exit(0)
     if result.advisory:
         print(json.dumps({

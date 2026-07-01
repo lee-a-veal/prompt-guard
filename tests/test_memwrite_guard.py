@@ -54,6 +54,15 @@ def _run(event, env_overrides=None):
     return json.loads(text) if text else None
 
 
+def _decision(r):
+    """Extract permissionDecision from hook output (None if absent)."""
+    return (r or {}).get("hookSpecificOutput", {}).get("permissionDecision")
+
+
+def _reason(r):
+    return (r or {}).get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
+
+
 def _write(path, content):
     return {"tool_name": "Write", "tool_input": {"file_path": path, "content": content}}
 
@@ -105,27 +114,27 @@ class TestHighRiskBlocked(unittest.TestCase):
     def test_instruction_override_blocked(self):
         result = _run(_write(_MEMORY_DIR, _HIGH_INJECTION))
         self.assertIsNotNone(result)
-        self.assertEqual(result.get("decision"), "block")
+        self.assertEqual(_decision(result), "deny")
 
     def test_exfiltration_write_blocked(self):
         result = _run(_write(_MEMORY_DIR, _EXFIL_INJECTION))
         self.assertIsNotNone(result)
-        self.assertEqual(result.get("decision"), "block")
+        self.assertEqual(_decision(result), "deny")
 
     def test_high_injection_edit_blocked(self):
         result = _run(_edit(_MEMORY_DIR, _HIGH_INJECTION))
         self.assertIsNotNone(result)
-        self.assertEqual(result.get("decision"), "block")
+        self.assertEqual(_decision(result), "deny")
 
     def test_block_reason_mentions_score_and_filename(self):
         result = _run(_write(_MEMORY_DIR, _HIGH_INJECTION))
-        reason = result.get("reason", "")
+        reason = _reason(result)
         self.assertIn("HIGH", reason)
         self.assertIn("user_profile.md", reason)
 
     def test_block_reason_mentions_injection(self):
         result = _run(_write(_MEMORY_DIR, _HIGH_INJECTION))
-        reason = result.get("reason", "").lower()
+        reason = _reason(result).lower()
         self.assertIn("injection", reason)
 
 
@@ -135,7 +144,7 @@ class TestMediumRiskWarns(unittest.TestCase):
     def test_medium_injection_not_blocked(self):
         result = _run(_write(_MEMORY_DIR, _MEDIUM_INJECTION))
         if result is not None:
-            self.assertNotEqual(result.get("decision"), "block")
+            self.assertNotEqual(_decision(result), "deny")
 
     def test_medium_injection_produces_advisory(self):
         result = _run(_write(_MEMORY_DIR, _MEDIUM_INJECTION))
@@ -152,22 +161,22 @@ class TestMemoryPathVariants(unittest.TestCase):
     def test_memory_md_root_detected(self):
         result = _run(_write(_MEMORY_MD, _HIGH_INJECTION))
         self.assertIsNotNone(result)
-        self.assertEqual(result.get("decision"), "block")
+        self.assertEqual(_decision(result), "deny")
 
     def test_ai_memory_detected(self):
         result = _run(_write(_AI_MEMORY, _HIGH_INJECTION))
         self.assertIsNotNone(result)
-        self.assertEqual(result.get("decision"), "block")
+        self.assertEqual(_decision(result), "deny")
 
     def test_claude_mem_detected(self):
         result = _run(_write(_CLAUDE_MEM, _HIGH_INJECTION))
         self.assertIsNotNone(result)
-        self.assertEqual(result.get("decision"), "block")
+        self.assertEqual(_decision(result), "deny")
 
     def test_thread_memory_detected(self):
         result = _run(_write(_THREAD_MEM, _HIGH_INJECTION))
         self.assertIsNotNone(result)
-        self.assertEqual(result.get("decision"), "block")
+        self.assertEqual(_decision(result), "deny")
 
 
 class TestEdgeCases(unittest.TestCase):
@@ -200,7 +209,7 @@ class TestEdgeCases(unittest.TestCase):
             env_overrides={"PROMPTGUARD_MEMORY_PATHS": r"/projects/myapp/"},
         )
         self.assertIsNotNone(result)
-        self.assertEqual(result.get("decision"), "block")
+        self.assertEqual(_decision(result), "deny")
 
 
 if __name__ == "__main__":
