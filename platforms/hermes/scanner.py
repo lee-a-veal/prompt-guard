@@ -115,16 +115,3 @@ def record_tool_call(tool_name: str, label: str = "") -> None:
         _session.record_tool_call(tool_name, label)
     except Exception:
         pass
-
-
-# ---------------------------------------------------------------------------
-# Guard module — high-level platform-agnostic interface
-# ---------------------------------------------------------------------------
-
-guard_available = False
-
-try:
-    from promptguard.guard import check_output, check_pre_tool, check_memory_write, GuardResult
-    guard_available = True
-except ImportError:
-    logger.debug("promptguard.guard not available — falling back to direct scanner calls")
