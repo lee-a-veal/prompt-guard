@@ -32,7 +32,7 @@ stop.
 
 2. **Run the scanner** for structured evidence (if not already run):
    ```bash
-   PYTHONPATH=/home/lost/projects/prompt-guard \
+   PYTHONPATH=~/projects/prompt-guard \
      python3 -m promptguard.scan --pretty <file>    # or pipe stdin
    ```
    (The package is NOT on the default path — a bare `python3 -m
