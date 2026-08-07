@@ -95,6 +95,25 @@ cat page.txt | python3 -m promptguard.scan --source webfetch
 
 Exit code: `0` none/low, `1` medium, `2` high.
 
+## Check the whitelist is still live
+
+Whitelist entries are anchored to a signal's **evidence text**. When a scanned
+file changes shape the anchor stops matching and the entry silently stops
+suppressing — nothing errors, the only symptom is a false positive reappearing
+that reads like a new detection. Run this after editing `whitelist.conf`, or
+after changing a file an entry protects:
+
+```bash
+python3 -m promptguard.whitelist_check . ~/.claude ~/CLAUDE.md
+```
+
+Exit code: `0` every entry matched, `1` some unmatched, `2` bad usage.
+
+**Unmatched is not the same as dead.** An entry matches nothing if the file it
+protects simply was not in the corpus you scanned — widening a real run from
+302 to 3,048 files took unmatched from 33 down to 8. Widen the corpus before
+concluding an entry is obsolete; the tool reports, you decide.
+
 ## Configuration
 
 | Env var | Default | Meaning |
@@ -124,6 +143,8 @@ python3 -m unittest discover -s tests -v
 promptguard/
   normalize.py   evasion-resistant text canonicalization
   scan.py        weighted signal scorer (Stage 1)
+  whitelist.py   per-signal evidence suppression
+  whitelist_check.py  liveness report for whitelist entries
 hooks/
   posttooluse_guard.py   PostToolUse hook -> scan -> advisory
 skills/prompt-guard/

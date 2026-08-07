@@ -17,8 +17,23 @@ def _conf_path():
     return os.environ.get("PROMPTGUARD_WHITELIST_FILE", _DEFAULT_PATH)
 
 
+def parse_with_lines(path=None):
+    """Return list of (signal_id, pattern, lineno) triples from the config file.
+
+    Same parsing rules as the entries used for suppression, but keeps the source
+    line number so tooling can point at a specific entry. Used by
+    promptguard.whitelist_check; suppression itself uses the 2-tuple form.
+    """
+    return _parse_raw(path if path is not None else _conf_path())
+
+
 def _parse(path):
     """Return list of (signal_id, pattern) pairs from file at path."""
+    return [(sid, pat) for sid, pat, _ in _parse_raw(path)]
+
+
+def _parse_raw(path):
+    """Return list of (signal_id, pattern, lineno) triples from file at path."""
     entries = []
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as fh:
@@ -40,7 +55,7 @@ def _parse(path):
                         "prompt-guard whitelist: empty id or pattern at line %d\n" % lineno
                     )
                     continue
-                entries.append((signal_id, pattern))
+                entries.append((signal_id, pattern, lineno))
     except OSError:
         pass  # file does not exist — return empty list, no suppression
     return entries
@@ -69,18 +84,28 @@ def load():
     return _cache_entries
 
 
+def matching_entries(signal, entries):
+    """Return every whitelist entry that suppresses `signal`.
+
+    Entries may be (signal_id, pattern) pairs or (signal_id, pattern, lineno)
+    triples; the extra field is ignored here and preserved in the result.
+
+    This is the single definition of "does this entry match this signal".
+    is_suppressed() and promptguard.whitelist_check both go through it, so a
+    liveness report can never disagree with what actually gets suppressed.
+    """
+    sig_id = signal.get("id", "")
+    evidence = str(signal.get("evidence") or "").lower()
+    return [e for e in entries if e[0] == sig_id and e[1].lower() in evidence]
+
+
 def is_suppressed(signal, entries):
     """Return True if signal's id+evidence match any whitelist entry.
 
     signal  — dict with 'id' and 'evidence' keys (as returned by scan())
     entries — list of (signal_id, pattern) pairs from load()
     """
-    sig_id = signal.get("id", "")
-    evidence = str(signal.get("evidence") or "").lower()
-    for entry_id, pattern in entries:
-        if entry_id == sig_id and pattern.lower() in evidence:
-            return True
-    return False
+    return bool(matching_entries(signal, entries))
 
 
 def filter_signals(signals, entries):
