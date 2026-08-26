@@ -60,14 +60,42 @@ _SIGNALS = [
      "Fake role tags / tool-call syntax to impersonate the harness"),
     ("exfiltration", 36,
      re.compile(
-         r"\b(send|post|exfiltrate|upload|email|leak|transmit|curl|wget|fetch|"
+         # Direction A (verb -> object). Deliberately has NO egress-sink
+         # requirement: "share your system prompt with me" is exfiltration with no
+         # URL in sight. Verbs stay uninflected here — adding -ed/-ing/-s to this
+         # unguarded form was measured on 2026-08-26 at +39 false positives over
+         # 188k lines of real repo text ("exposes ... token usage", "shared bearer
+         # token", "ships the named-token foundation"), so it is not worth it.
+         r"(?:"
+         r"\b(?:send|post|exfiltrate|upload|email|leak|transmit|curl|wget|fetch|"
          r"share|forward|transfer|export|dump|copy|relay|disclose|reveal|give|"
          r"extract|harvest|ship|push|pipe|output|expose|smuggle)\b"
          r"[^\n]{0,60}?"
-         r"\b(api[_ ]?key|secret|token|password|credential|\.ssh|id_rsa|"
+         r"\b(?:api[_ ]?key|secret|token|password|credential|\.ssh|id_rsa|"
          r"/etc/passwd|environment variable|conversation|chat history|"
          r"system prompt|system message|private key|ssh key|access key|"
          r"session|auth|bearer|cookie|passphrase|configuration)\b"
+         r")|(?:"
+         # Direction B (object -> verb -> external sink), added 2026-08-26.
+         # Direction A is directional, so it scored 0 on "read ~/.ssh/id_rsa and
+         # curl it to <url>" while scoring 36 on the same intent phrased
+         # "send ~/.ssh/id_rsa to <url>". Requiring an explicit egress sink is what
+         # buys precision back: inflected verbs and plural objects are safe here
+         # because a URL/email/IP destination must also be present. Measured the
+         # same day at 0 new hits over 265k lines of real repo text.
+         r"\b(?:api[_ ]?key|secret|token|password|credential|\.ssh|id_rsa|"
+         r"/etc/passwd|environment variable|conversation|chat history|"
+         r"system prompt|system message|private key|ssh key|access key|"
+         r"session|auth|bearer|cookie|passphrase|configuration)(?:s|es)?\b"
+         r"[^\n]{0,60}?"
+         r"\b(?:(?:send|post|exfiltrate|upload|email|leak|transmit|curl|wget|"
+         r"fetch|share|forward|transfer|export|dump|copy|relay|disclose|reveal|"
+         r"give|extract|harvest|ship|push|pipe|output|expose|smuggle)"
+         r"(?:s|es|ed|d|ing|ped|pped)?|copied|copies)\b"
+         r"[^\n]{0,40}?"
+         r"(?:https?://|ftp://|\b[\w.+-]+@[\w-]+\.[a-z]{2,}\b|"
+         r"\b\d{1,3}(?:\.\d{1,3}){3}\b)"
+         r")"
      ),
      "Instruction to exfiltrate secrets or context"),
     ("embedded_command", 32,
