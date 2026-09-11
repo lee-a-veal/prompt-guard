@@ -211,6 +211,49 @@ _NOOP = GuardResult()
 # Public API
 # ---------------------------------------------------------------------------
 
+def scan_content(content, source="scan_content"):
+    """Scan arbitrary content and return the whitelisted result.
+
+    The scanning primitive for callers that are not Claude Code tools -- the
+    HTTP `POST /scan` endpoint, and anything else whose contract is
+    "here is some text, score it". Unlike check_output() there is no
+    _D1_TOOLS gate and no session-taint recording: those encode Claude Code
+    hook policy, and applying them to a caller that has no tool name at all
+    silently returned _NOOP (score 0) for every input.
+
+    Failures are NOT swallowed into a zero score. A caller cannot distinguish
+    "scanned, found nothing" from "never scanned" if both return 0, and the
+    consumers of this function fail closed on a non-numeric reply -- so an
+    unavailable scanner must raise, not report content clean.
+    """
+    if not _SCAN_OK:
+        raise RuntimeError("promptguard.scan is unavailable; content was not scanned")
+
+    if not (content or "").strip():
+        return _NOOP
+
+    result = _scan(content, source=source)
+
+    if _WHITELIST_OK:
+        entries = _whitelist.load()
+        signals = _whitelist.filter_signals(result["signals"], entries)
+    else:
+        signals = result["signals"]
+    suppressed = [s for s in result["signals"] if s not in signals]
+    score = min(100, sum(s.get("weight", 0) for s in signals))
+
+    return GuardResult(
+        risk_score=score,
+        risk_band=_band_from_score(score),
+        block=False,
+        advisory=(
+            _suppression_note(suppressed, result["risk_score"], score)
+            if suppressed else ""
+        ),
+        signals=signals,
+    )
+
+
 def check_output(tool_name, content, label=""):
     """Scan untrusted tool output for injection signals (D1).
 

@@ -4,7 +4,7 @@ Listens on localhost:9373 (configurable via --port).
 All endpoints return HTTP 200; errors are returned as JSON {"error": "..."}.
 
 Endpoints:
-  POST /scan         — check_output()       → GuardResult as JSON
+  POST /scan         — scan_content()       → GuardResult as JSON
   POST /scan-pre     — check_pre_tool()     → GuardResult as JSON
   POST /scan-memory  — check_memory_write() → GuardResult as JSON
   GET  /health       — {"status": "ok"}
@@ -31,8 +31,8 @@ if _REPO_ROOT not in sys.path:
 from promptguard.guard import (  # noqa: E402
     GuardResult,
     check_memory_write,
-    check_output,
     check_pre_tool,
+    scan_content,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -99,10 +99,12 @@ class GuardHandler(BaseHTTPRequestHandler):
 
         try:
             if path == "/scan":
-                tool_name = str(body.get("tool_name") or "")
+                # scan_content(), not check_output(): the latter is gated on
+                # _D1_TOOLS and returns a 0 score for any caller that is not a
+                # Claude Code tool. `tool_name` is accepted and ignored so that
+                # existing callers keep working; it never changes the score.
                 content = str(body.get("content") or "")
-                label = str(body.get("label") or "")
-                result = check_output(tool_name, content, label)
+                result = scan_content(content)
                 self._send_json(_result_to_dict(result))
 
             elif path == "/scan-pre":
