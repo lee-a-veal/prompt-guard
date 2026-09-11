@@ -108,7 +108,13 @@ _TAINT_DECAY_SECONDS = int(os.environ.get("PROMPTGUARD_TAINT_DECAY_SECONDS", "36
 # (The file-path fallback below handles absolute paths; this covers tilde
 # forms like `python3 ~/.ai-memory/scripts/session_sync.py`.)
 _SAFE_CMD_PATTERNS = [
-    re.compile(r"\bpython3?\s+~?/?home/lost/\.ai-memory/scripts/[\w./-]+"),
+    re.compile(r"\bpython3?\s+(~|/?home/lost)/\.ai-memory/scripts/[\w./-]+"),
+    # Cron variant: venv sourced in the same command line — `source <venv> &&
+    # python3 ~/.ai-memory/scripts/session_sync.py`. The bare-invocation
+    # pattern above can't match because `\s+(~|...)` requires the tilde to
+    # follow `python3` directly. The `Sync offset:` line in this output is
+    # benign and would otherwise trip `exfiltration` (score 36) on every run.
+    re.compile(r"source\s+\S+neo4j-venv/bin/activate\b.*\bpython3?\s+(~|/?home/lost)/\.ai-memory/scripts/[\w./-]+"),
 ]
 
 # Memory-path regex patterns.
